@@ -40,57 +40,47 @@ is how recently it has been visited the default tick is 60 seconds
         trackers = Tracker.all()
         for tracker in trackers:
             self.response.out.write(" - %s\n"%tracker.name)
-        
-
-class NewTrackerHandler(webapp.RequestHandler):
-    def get(self,key):
-        self.response.headers['Content-Type'] = 'text/plain'
-        if re.match(r"\w{3,25}",key):
-            tracker = list(Tracker.all().filter('name =',key))
-            if len(tracker):
-                self.response.out.write('Tracker "%s" already exists, you can still use it though'%key)
-            else:
-                Tracker(name=key).put()
-                self.response.out.write('Tracker "%s" created'%key)
-            
-        else:
-            self.response.out.write('Tracker must contain only numbers, letters and the underscore, it must also be between 3 and 25 charachters')
 
 class TrackerHandler(webapp.RequestHandler):
     def get(self,key):
         self.response.headers['Content-Type'] = 'text/plain'
-        if re.match(r"\w{3,25}",key):
+        if re.match(r"\w{3,25}",key): ## check if a tracker is valid
+            ## Check if the tracker exists, if not create it
             tracker = Tracker.all().filter('name =',key).get()
             if tracker==None:
                 tracker = Tracker(name=key)
                 tracker.put()
-                
+
+            ## Check if the peer making the request is already in the DB, if not add them
             p = Peer.all().filter('address =',self.request.remote_addr).filter('tracker =',tracker).get()
             if p != None:
                 p.put()
             else:
                 Peer(address=self.request.remote_addr,tracker=tracker).put()
 
-            plist = Peer.all().filter('tracker =',tracker)
+            ## try getting a given tick if not set the default
             try:
                 tick = int(self.request.get('tick'))
             except:
                 tick = 60
-                
-            plist.filter('datetime >',datetime.now() - timedelta(seconds=tick))
-            
+
+            ## Get and echo the relevant peers
+            plist = Peer.all().filter('tracker =',tracker).filter('datetime >',datetime.now() - timedelta(seconds=tick))
             for peer in plist:
                 if peer.address != self.request.remote_addr:
                     self.response.out.write(peer.address+"\n")
         else:
             self.response.out.write('Tracker must contain only numbers, letters and the underscore, it must also be between 3 and 25 charachters')
+
 class CleanHandler(webapp.RequestHandler):
     def get(self):
+        ## remove any old peers
         plist = Peer.all().filter('datetime <',datetime.now() - timedelta(days=1))
         peercount = plist.count()
         for p in plist:
             p.delete()
-        
+
+        ## remove any empty trackers
         trackers = Tracker.all()
         trackercount = 0
         for tracker in trackers:
@@ -98,7 +88,8 @@ class CleanHandler(webapp.RequestHandler):
             if p == None:
                 tracker.delete()
                 trackercount += 1
-        
+
+        ## some simple stats
         self.response.headers['Content-Type'] = 'text/plain'
         self.response.out.write("Cleaned %d trackers and %d peers"%(trackercount,peercount))
         if trackercount and peercount:
@@ -106,8 +97,11 @@ class CleanHandler(webapp.RequestHandler):
 
 
 def main():
+    ## Set up logging, ready for cleaning
+    logging.getLogger().setLevel(logging.DEBUG)
+
+    ## Set Up URLS
     application = webapp.WSGIApplication([('/', MainHandler),
-                                          ('/new/(.*?)/?', NewTrackerHandler),
                                           ('/trk/(.*?)/?', TrackerHandler),
                                           ('/clean/', CleanHandler)],
                                          debug=True)
