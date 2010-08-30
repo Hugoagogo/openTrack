@@ -1,0 +1,4 @@
+cron:
+- description: Clean The DB
+  url: /clean/
+  schedule: every 24 hours
