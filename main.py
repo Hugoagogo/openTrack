@@ -38,7 +38,7 @@ is how recently it has been visited the default tick is 60 seconds
 NEW: http://%s/tick/<tracker name>
 provides a way of refreshing yourself in a tracker without retrieveing a list
  
-\nCurrent Trackers (activity last 24 hours)\n"""%(url))
+\nCurrent Trackers (activity last 24 hours)\n"""%(url,url))
         trackers = Tracker.all()
         for tracker in trackers:
             self.response.out.write(" - %s\n"%tracker.name)
