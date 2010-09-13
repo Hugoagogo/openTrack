@@ -12,7 +12,6 @@ from google.appengine.ext import db
 from models import Tracker, Peer
 from datetime import datetime, timedelta
 
-
 class MainHandler(webapp.RequestHandler):
     def get(self):
         if os.environ.get('HTTP_HOST'):
@@ -35,6 +34,9 @@ that tracker and add yours to the list
 
 Optionally add "?tick=<seconds>" to the url where seconds
 is how recently it has been visited the default tick is 60 seconds
+
+NEW: http://%s/tick/<tracker name>
+provides a way of refreshing yourself in a tracker without retrieveing a list
  
 \nCurrent Trackers (activity last 24 hours)\n"""%(url))
         trackers = Tracker.all()
@@ -46,17 +48,9 @@ class TrackerHandler(webapp.RequestHandler):
         self.response.headers['Content-Type'] = 'text/plain'
         if re.match(r"\w{3,25}",key): ## check if a tracker is valid
             ## Check if the tracker exists, if not create it
-            tracker = Tracker.all().filter('name =',key).get()
-            if tracker==None:
-                tracker = Tracker(name=key)
-                tracker.put()
-
+            tracker = GetTracker(key)
             ## Check if the peer making the request is already in the DB, if not add them
-            p = Peer.all().filter('address =',self.request.remote_addr).filter('tracker =',tracker).get()
-            if p != None:
-                p.put()
-            else:
-                Peer(address=self.request.remote_addr,tracker=tracker).put()
+            Tick(tracker,self.request.remote_addr)
 
             ## try getting a given tick if not set the default
             try:
@@ -71,6 +65,14 @@ class TrackerHandler(webapp.RequestHandler):
                     self.response.out.write(peer.address+"\n")
         else:
             self.response.out.write('Tracker must contain only numbers, letters and the underscore, it must also be between 3 and 25 charachters')
+
+class TickHandler(webapp.RequestHandler):
+    def get(self,key):
+        if re.match(r"\w{3,25}",key): ## check if a tracker is valid
+            ## Check if the tracker exists, if not create it
+            tracker = GetTracker(key)
+            ## Check if the peer making the request is already in the DB, if not add them
+            Tick(tracker,self.request.remote_addr)
 
 class CleanHandler(webapp.RequestHandler):
     def get(self):
@@ -95,6 +97,20 @@ class CleanHandler(webapp.RequestHandler):
         if trackercount and peercount:
             logging.info("Cleaned %d trackers and %d peers"%(trackercount,peercount))
 
+def GetTracker(key):
+    """Get a tracker, or create one if it dosent exist"""
+    tracker = Tracker.all().filter('name =',key).get()
+    if tracker==None:
+        tracker = Tracker(name=key)
+        tracker.put()
+    return tracker
+
+def Tick(tracker,address):
+    p = Peer.all().filter('address =',address).filter('tracker =',tracker).get()
+    if p != None:
+        p.put()
+    else:
+        Peer(address=address,tracker=tracker).put()
 
 def main():
     ## Set up logging, ready for cleaning
@@ -103,6 +119,7 @@ def main():
     ## Set Up URLS
     application = webapp.WSGIApplication([('/', MainHandler),
                                           ('/trk/(.*?)/?', TrackerHandler),
+                                          ('/tick/(.*?)/?', TickHandler),
                                           ('/clean/', CleanHandler)],
                                          debug=True)
     run_wsgi_app(application)

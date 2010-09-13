@@ -8,3 +8,6 @@ To use the tracker visit
 http://open-track.appspot.com/trk/
 The tracker does not need to be setup beforhand It will return a list of IP adresses that have visited that tracker and add yours to the list
 Optionally add "?tick=" to the url where seconds is how recently it has been visited the default tick is 60 seconds
+
+NEW: http://%s/tick/<tracker name>
+provides a way of refreshing yourself in a tracker without retrieveing a list
